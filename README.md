@@ -16,7 +16,7 @@ If you are using a terminal, the search term will also be highlighted in the lin
 
 ### Download Querysnipe
 
-Release builds for Linux and Mac are available from the "Releases" page in this repository.
+Release builds are available under the "Releases" page in this repository.
 
 ### Build Querysnipe
 
