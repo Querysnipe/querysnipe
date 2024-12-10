@@ -102,7 +102,7 @@ static bool is_line_in_range(Time time_offset, String line, Query query) {
   return in_range;
 }
 
-static void check(Arena* arena, Query query, String line) {  
+static void display(Arena* arena, Query query, String line) {  
   I64     saved  = save(arena);
   Builder output = make_builder(arena);
   
@@ -135,7 +135,21 @@ static void check(Arena* arena, Query query, String line) {
   restore(arena, saved);
 }
 
-I32 main(I32 argc, char** argv) {
+static void handle_bytes(Arena* arena, Builder* line, Time time_offset, Query query, String buffer) {
+  for (I64 i = 0; i < buffer.size; i++) {
+    U8 c = buffer[i];
+    if (c == '\n') {
+      if (is_line_in_range(time_offset, line->result, query)) {
+	display(arena, query, line->result);
+      }
+      reset(line);
+    } else {
+      push(line, c);
+    }
+  }
+}
+
+int main(int argc, char** argv) {
   atexit(flush);
 
   if (argc < 3) {
@@ -173,7 +187,11 @@ I32 main(I32 argc, char** argv) {
 
   for (I64 i = 0; i < log_fds.count; i++) {
     I32 fd = log_fds[i];
-    
+
+    struct aiocb operations[16] = {};
+    for (int i = 0; i < length(operations); i++) {
+    }
+
     while (true) {
       I64 bytes_read = read(fd, buffer.data, buffer.size);
       if (bytes_read == -1) {
@@ -185,18 +203,7 @@ I32 main(I32 argc, char** argv) {
       }
 
       // println(INFO "Read ", bytes_read, " bytes.");
-
-      for (I64 i = 0; i < bytes_read; i++) {
-	U8 c = buffer[i];
-	if (c == '\n') {
-	  if (is_line_in_range(time_offset, line.result, query)) {
-	    check(&arenas[0], query, line.result);
-	  }
-	  reset(&line);
-	} else {
-	  push(&line, c);
-	}
-      }
+      handle_bytes(&arenas[0], &line, time_offset, query, prefix(buffer, bytes_read));
     }
 
     if (close(fd) == -1) {
