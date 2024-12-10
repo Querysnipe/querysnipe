@@ -185,6 +185,8 @@ int main(int argc, char** argv) {
     buffers[i] = push_bytes(&arenas[0], 2 * 2 * 1024); // 2 MiB
   }
 
+  struct aiocb operations[length(buffers)] = {};
+
   Builder line = make_builder(&arenas[2]);
 
   for (I64 i = 0; i < log_files.count; i++) {
@@ -192,19 +194,38 @@ int main(int argc, char** argv) {
     I64  file_offset = 0;
 
     while (file_offset < file.size) {
-      for (I64 i = 0; i < length(buffers); i++) {
+      I64 enqeued = 0;
+      
+      for (I64 i = 0; i < length(buffers) && file_offset < file.size; i++) {
 	String buffer = buffers[i];
-	
-	I64 bytes_read = pread(file.fd, buffer.data, buffer.size, file_offset);
+
+	struct aiocb* operation = &operations[enqeued];
+	operation->aio_nbytes   = min(buffer.size, file.size - file_offset);
+	operation->aio_fildes   = file.fd;
+	operation->aio_offset   = file_offset;
+	operation->aio_buf      = buffer.data;
+
+	if (aio_read(operation) == -1) {
+	  println(ERROR "Failed to read file: ", get_error(), '.');
+	  break;
+	}
+
+	if (aio_suspend(&operation, 1, NULL) == -1) {
+	  println(ERROR "Failed to wait for requests: ", get_error(), '.');
+	  break;
+	}
+
+	I64 bytes_read = aio_return(operation);
 	if (bytes_read == -1) {
-	  println(ERROR "Failed to open file: ", get_error(), '.');
+	  println(ERROR "Failed to read file: ", get_error(), '.');
 	  break;
 	}
 	if (bytes_read == 0) {
 	  break;
 	}
 
-	// println(INFO "Read ", bytes_read, " bytes.");
+	assert(bytes_read == operation->aio_nbytes);
+
 	handle_bytes(&arenas[0], &line, time_offset, query, prefix(buffer, bytes_read));
 
 	file_offset += bytes_read;

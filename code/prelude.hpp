@@ -7,6 +7,11 @@ typedef unsigned int       U32;
 typedef unsigned long long U64;
 typedef float              F32;
 
+template <typename A>
+static A min(A a, A b) {
+  return a < b ? a : b;
+}
+
 static bool is_digit(U8 c) {
   return '0' <= c && c <= '9';
 }
