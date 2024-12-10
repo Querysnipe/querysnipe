@@ -191,22 +191,24 @@ int main(int argc, char** argv) {
     File file        = log_files[i];
     I64  file_offset = 0;
 
-    String buffer = buffers[0];
-
     while (file_offset < file.size) {
-      I64 bytes_read = pread(file.fd, buffer.data, buffer.size, file_offset);
-      if (bytes_read == -1) {
-	println(ERROR "Failed to open file: ", get_error(), '.');
-	break;
-      }
-      if (bytes_read == 0) {
-	break;
-      }
+      for (I64 i = 0; i < length(buffers); i++) {
+	String buffer = buffers[i];
+	
+	I64 bytes_read = pread(file.fd, buffer.data, buffer.size, file_offset);
+	if (bytes_read == -1) {
+	  println(ERROR "Failed to open file: ", get_error(), '.');
+	  break;
+	}
+	if (bytes_read == 0) {
+	  break;
+	}
 
-      // println(INFO "Read ", bytes_read, " bytes.");
-      handle_bytes(&arenas[0], &line, time_offset, query, prefix(buffer, bytes_read));
+	// println(INFO "Read ", bytes_read, " bytes.");
+	handle_bytes(&arenas[0], &line, time_offset, query, prefix(buffer, bytes_read));
 
-      file_offset += bytes_read;
+	file_offset += bytes_read;
+      }
     }
 
     if (close(file.fd) == -1) {
