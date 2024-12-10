@@ -16,40 +16,38 @@
 #include "builder.hpp"
 #include "time.hpp"
 
-static I32 open_file(String path) {
-  println(INFO "Opening ", path, ".");
-  
-  I32 fd = open((char*) path.data, O_RDONLY);
-  if (fd == -1) {
-    println(ERROR "Failed to open file: ", get_error(), '.');
-    exit(EXIT_FAILURE);
-  }
-  return fd;
-}
+struct File {
+  I32         fd;
+  struct stat info;
+};
 
-static mode_t get_file_mode(I32 fd) {
-  struct stat info = {};
-  if (fstat(fd, &info) == -1) {
-    println(ERROR "Failed to stat file: ", get_error(), '.');
-    exit(EXIT_FAILURE);
-  }
-  return info.st_mode;
-}
-
-static void open_log_fds(Arena* path_arena, String root, Array<I32>* output) {
+static void open_log_files(Arena* path_arena, String root, Array<File>* output) {
   I64 path_saved = save(path_arena);
   
   Builder path = make_builder(path_arena);
   push(&path, root);
   push(&path, 0);
 
-  I32    fd   = open_file(path.result);
-  mode_t mode = get_file_mode(fd);
+  println(INFO "Opening ", path.result, ".");
+  
+  I32 fd = open((char*) path.result.data, O_RDONLY);
+  if (fd == -1) {
+    println(ERROR "Failed to open file: ", get_error(), '.');
+    exit(EXIT_FAILURE);
+  }
+
+  struct stat info = {};
+  if (fstat(fd, &info) == -1) {
+    println(ERROR "Failed to stat file: ", get_error(), '.');
+    exit(EXIT_FAILURE);
+  }
+  
+  mode_t mode = info.st_mode;
 
   pop(&path, 1);
     
   if (S_ISREG(mode)) {
-    push(output, fd);
+    push(output, (File) { fd, info });
   }
 
   if (S_ISDIR(mode)) {
@@ -67,7 +65,7 @@ static void open_log_fds(Arena* path_arena, String root, Array<I32>* output) {
 	push(&path, '/');
 	push(&path, name);
 	push(&path, 0);
-	open_log_fds(path_arena, path.result, output);
+	open_log_files(path_arena, path.result, output);
 	flush();
 	pop(&path, name.size + 2);
       }
@@ -179,21 +177,21 @@ int main(int argc, char** argv) {
     arenas[i] = make_arena(1ll << 32);
   }
 
-  Array<I32> log_fds = make_array<I32>(&arenas[0]);
-  open_log_fds(&arenas[1], path, &log_fds);
+  Array<File> log_files = make_array<File>(&arenas[0]);
+  open_log_files(&arenas[1], path, &log_files);
 
   String  buffer = push_bytes(&arenas[0], 2 * 2 * 1024);
   Builder line   = make_builder(&arenas[2]);
 
-  for (I64 i = 0; i < log_fds.count; i++) {
-    I32 fd = log_fds[i];
+  for (I64 i = 0; i < log_files.count; i++) {
+    File file = log_files[i];
 
     struct aiocb operations[16] = {};
     for (int i = 0; i < length(operations); i++) {
     }
 
     while (true) {
-      I64 bytes_read = read(fd, buffer.data, buffer.size);
+      I64 bytes_read = read(file.fd, buffer.data, buffer.size);
       if (bytes_read == -1) {
 	println(ERROR "Failed to open file: ", get_error(), '.');
 	break;
@@ -206,7 +204,7 @@ int main(int argc, char** argv) {
       handle_bytes(&arenas[0], &line, time_offset, query, prefix(buffer, bytes_read));
     }
 
-    if (close(fd) == -1) {
+    if (close(file.fd) == -1) {
       println(WARN "Failed to close file.");
     }
   }
