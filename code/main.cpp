@@ -17,8 +17,8 @@
 #include "time.hpp"
 
 struct File {
-  I32         fd;
-  struct stat info;
+  I32 fd;
+  I64 size;
 };
 
 static void open_log_files(Arena* path_arena, String root, Array<File>* output) {
@@ -47,7 +47,7 @@ static void open_log_files(Arena* path_arena, String root, Array<File>* output) 
   pop(&path, 1);
     
   if (S_ISREG(mode)) {
-    push(output, (File) { fd, info });
+    push(output, (File) { fd, info.st_size });
   }
 
   if (S_ISDIR(mode)) {
@@ -180,18 +180,21 @@ int main(int argc, char** argv) {
   Array<File> log_files = make_array<File>(&arenas[0]);
   open_log_files(&arenas[1], path, &log_files);
 
-  String  buffer = push_bytes(&arenas[0], 2 * 2 * 1024);
-  Builder line   = make_builder(&arenas[2]);
+  String buffers[16] = {};
+  for (I64 i = 0; i < length(buffers); i++) {
+    buffers[i] = push_bytes(&arenas[0], 2 * 2 * 1024); // 2 MiB
+  }
+
+  Builder line = make_builder(&arenas[2]);
 
   for (I64 i = 0; i < log_files.count; i++) {
-    File file = log_files[i];
+    File file        = log_files[i];
+    I64  file_offset = 0;
 
-    struct aiocb operations[16] = {};
-    for (int i = 0; i < length(operations); i++) {
-    }
+    String buffer = buffers[0];
 
-    while (true) {
-      I64 bytes_read = read(file.fd, buffer.data, buffer.size);
+    while (file_offset < file.size) {
+      I64 bytes_read = pread(file.fd, buffer.data, buffer.size, file_offset);
       if (bytes_read == -1) {
 	println(ERROR "Failed to open file: ", get_error(), '.');
 	break;
@@ -202,6 +205,8 @@ int main(int argc, char** argv) {
 
       // println(INFO "Read ", bytes_read, " bytes.");
       handle_bytes(&arenas[0], &line, time_offset, query, prefix(buffer, bytes_read));
+
+      file_offset += bytes_read;
     }
 
     if (close(file.fd) == -1) {
