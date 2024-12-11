@@ -183,7 +183,7 @@ int main(int argc, char** argv) {
 
   String buffers[16] = {};
   for (I64 i = 0; i < length(buffers); i++) {
-    buffers[i] = push_bytes(&arenas[0], 2 * 2 * 1024); // 2 MiB
+    buffers[i] = push_bytes(&arenas[0], 2 * 1024 * 1024); // 2 MiB
   }
 
   struct aiocb operations[length(buffers)] = {};
