@@ -194,22 +194,27 @@ int main(int argc, char** argv) {
     I64  file_offset = 0;
 
     while (file_offset < file.size) {
-      I64 enqeued = 0;
-      
       for (I64 i = 0; i < length(buffers) && file_offset < file.size; i++) {
 	String buffer = buffers[i];
-
-	struct aiocb* operation = &operations[enqeued];
+	
+	struct aiocb* operation = &operations[i];
+	memset(operation, 0, sizeof(struct aiocb));
 	operation->aio_nbytes   = min(buffer.size, file.size - file_offset);
 	operation->aio_fildes   = file.fd;
 	operation->aio_offset   = file_offset;
 	operation->aio_buf      = buffer.data;
 
 	if (aio_read(operation) == -1) {
-	  println(ERROR "Failed to read file: ", get_error(), '.');
-	  break;
+	  println(ERROR "Failed to request read to file: ", get_error(), '.');
+	  exit(EXIT_FAILURE);
 	}
 
+	file_offset += buffer.size;
+      }
+      
+      for (I64 i = 0; i < length(buffers); i++) {
+	struct aiocb* operation = &operations[i];
+	
 	if (aio_suspend(&operation, 1, NULL) == -1) {
 	  println(ERROR "Failed to wait for requests: ", get_error(), '.');
 	  break;
@@ -226,9 +231,8 @@ int main(int argc, char** argv) {
 
 	assert(bytes_read == operation->aio_nbytes);
 
-	handle_bytes(&arenas[0], &line, time_offset, query, prefix(buffer, bytes_read));
-
-	file_offset += bytes_read;
+	String buffer((U8*) operation->aio_buf, operation->aio_nbytes);
+	handle_bytes(&arenas[0], &line, time_offset, query, buffer);
       }
     }
 
