@@ -8,5 +8,5 @@ else
 fi
 
 mkdir -p build
-"$CC" -g -std=c++20 code/main.cpp -o build/querysnipe
-"$CC" -g -std=c++20 code/test.cpp -o build/test
+"$CC" -g -std=c++20 -fsanitize=undefined -o build/querysnipe code/main.cpp
+"$CC" -g -std=c++20 -fsanitize=undefined -o build/test       code/test.cpp

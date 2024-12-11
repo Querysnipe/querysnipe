@@ -129,6 +129,7 @@ static void display(Arena* arena, Query query, String line) {
   push(&output, '\n');
   if (found) {
     print(output.result);
+    // asm volatile ("" : : "r,m" (output.result));
   }
   restore(arena, saved);
 }
@@ -194,10 +195,12 @@ int main(int argc, char** argv) {
     I64  file_offset = 0;
 
     while (file_offset < file.size) {
+      I64 operation_count = 0;
+      
       for (I64 i = 0; i < length(buffers) && file_offset < file.size; i++) {
 	String buffer = buffers[i];
 	
-	struct aiocb* operation = &operations[i];
+	struct aiocb* operation = &operations[operation_count];
 	memset(operation, 0, sizeof(struct aiocb));
 	operation->aio_nbytes   = min(buffer.size, file.size - file_offset);
 	operation->aio_fildes   = file.fd;
@@ -210,9 +213,10 @@ int main(int argc, char** argv) {
 	}
 
 	file_offset += buffer.size;
+	operation_count++;
       }
       
-      for (I64 i = 0; i < length(buffers); i++) {
+      for (I64 i = 0; i < operation_count; i++) {
 	struct aiocb* operation = &operations[i];
 	
 	if (aio_suspend(&operation, 1, NULL) == -1) {
